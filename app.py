@@ -1,4 +1,4 @@
-import os
+
 import re
 import tempfile
 from datetime import datetime
@@ -19,7 +19,7 @@ import pypandoc
 from flask import Flask, request, jsonify
 
 # Load environment variables
-load_dotenv()
+
 
 # Set up logging
 logging.basicConfig(
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Bot token from environment variable
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"
 
 class WattpadBot:
     def __init__(self):
