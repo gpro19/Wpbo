@@ -16,6 +16,7 @@ from telegram.ext import (
 import aiohttp
 import logging
 from flask import Flask
+import threading
 
 # Set up logging
 logging.basicConfig(
@@ -24,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize Flask app
-app = Flask(__name__)
+flask_app = Flask(__name__)
 
 # Bot token (langsung ditulis di sini)
 TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"  # Ganti dengan token bot Anda
@@ -41,7 +42,6 @@ class WattpadBot:
         self.part_pattern = r"wattpad\.com/(\d+)"
 
     async def get_story(self, story_id: int) -> Dict:
-        """Retrieve story data from a story ID."""
         async with aiohttp.ClientSession(headers=self.headers, raise_for_status=True) as session:
             async with session.get(
                 f"https://www.wattpad.com/api/v3/stories/{story_id}?fields=id,cover,readCount,voteCount,commentCount,modifyDate,numParts,language(name),user(name),completed,mature,title,parts(id)"
@@ -49,7 +49,6 @@ class WattpadBot:
                 return await response.json()
 
     async def get_story_from_part(self, part_id: int) -> Dict:
-        """Retrieve story data from a part ID."""
         async with aiohttp.ClientSession(headers=self.headers, raise_for_status=True) as session:
             async with session.get(
                 f"https://www.wattpad.com/api/v3/story_parts/{part_id}?fields=groupId,group(cover,readCount,voteCount,commentCount,modifyDate,numParts,language(name),user(name),completed,mature,title,parts(id))"
@@ -57,7 +56,6 @@ class WattpadBot:
                 return await response.json()
 
     async def download_file(self, url: str, filename: str) -> str:
-        """Download file from URL and save to temp directory."""
         filepath = os.path.join(self.temp_dir, filename)
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
@@ -73,7 +71,6 @@ class WattpadBot:
         return None
 
     def format_story_info(self, story: Dict) -> str:
-        """Format story information into a readable string."""
         info = f"📖 <b>{story['title']}</b>\n"
         info += f"👤 Author: {story['user']['name']}\n\n"
         info += f"👀 Reads: {story['readCount']:,}\n"
@@ -91,7 +88,6 @@ class WattpadBot:
         return info
 
     def create_keyboard(self, story_id: int) -> InlineKeyboardMarkup:
-        """Create an inline keyboard with download options."""
         keyboard = [
             [
                 InlineKeyboardButton("📥 Download EPUB", callback_data=f"download_{story_id}_epub"),
@@ -104,7 +100,6 @@ class WattpadBot:
         return InlineKeyboardMarkup(keyboard)
 
     async def handle_button_click(self, update: Update, context: CallbackContext) -> None:
-        """Handle button click events for downloads."""
         query = update.callback_query
         await query.answer()
         
@@ -121,7 +116,7 @@ class WattpadBot:
         try:
             story_data = await self.get_story(story_id)
             title = story_data["title"]
-            safe_title = re.sub(r'[\\/*?:"<>|]', "_", title)  # Remove invalid filename characters
+            safe_title = re.sub(r'[\\/*?:"<>|]', "_", title)
 
             if file_type == "epub":
                 url = f"{self.host}/download/{story_id}?bot=true&format=epub"
@@ -152,7 +147,6 @@ class WattpadBot:
                 os.remove(filepath)
             
     async def handle_message(self, update: Update, context: CallbackContext) -> None:
-        """Handle incoming messages that might contain Wattpad links."""
         message = update.message
         if message.from_user.is_bot:
             return
@@ -230,13 +224,12 @@ class WattpadBot:
                 )
 
 
-@app.route('/')
+@flask_app.route('/')
 def home():
     return "Wattpad Bot is running!"
 
 
 async def start(update: Update, context: CallbackContext) -> None:
-    """Send a message when the command /start is issued."""
     help_text = (
         "Welcome to Wattpad Story Downloader Bot!\n\n"
         "Just send me a Wattpad story URL and I'll provide EPUB download options.\n\n"
@@ -249,7 +242,6 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 
 async def info(update: Update, context: CallbackContext) -> None:
-    """Send bot information."""
     info_text = (
         "📚 <b>Wattpad Story Downloader Bot</b>\n\n"
         "This bot helps you easily download Wattpad stories in EPUB format.\n\n"
@@ -287,13 +279,14 @@ async def main():
     await application.run_polling()
 
 
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    
-    # Run Flask in a separate thread
-    from threading import Thread
-    flask_thread = Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': 8080})
-    flask_thread.start()
+def run_flask():
+    """Run the Flask app."""
+    flask_app.run(host='0.0.0.0', port=8000)
+
+
+if __name__ == '__main__':
+    # Start Flask in a separate thread
+    threading.Thread(target=run_flask, daemon=True).start()
     
     # Run the bot in the main thread
-    loop.run_until_complete(main())
+    asyncio.run(main())
