@@ -1,4 +1,4 @@
-
+import os
 import re
 import tempfile
 from datetime import datetime
@@ -11,15 +11,15 @@ from telegram.ext import (
     MessageHandler,
     filters,
     CallbackContext,
-    CallbackQueryHandler
+    CallbackQueryHandler,
 )
 import aiohttp
 import logging
 import pypandoc
-from flask import Flask, request, jsonify
+from flask import Flask, request
 
 # Load environment variables
-
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Bot token from environment variable
-TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"
+TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"  # Ganti dengan token bot Anda
 
 class WattpadBot:
     def __init__(self):
@@ -331,8 +331,8 @@ async def info(update: Update, context: CallbackContext) -> None:
     )
 
 
-def main() -> None:
-    """Start the bot and Flask server."""
+def run_bot():
+    """Start the bot using polling."""
     # Check if pandoc is installed
     try:
         pypandoc.get_pandoc_version()
@@ -355,10 +355,17 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(wattpad_bot.handle_button_click))
 
     # Start bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_polling()
 
 
 if __name__ == "__main__":
-    # Run Flask app
-    port = "8080"
-    app.run(host="0.0.0.0", port=port)
+    # Jalankan Flask dan bot secara bersamaan
+    from threading import Thread
+
+    # Jalankan bot di thread terpisah
+    bot_thread = Thread(target=run_bot)
+    bot_thread.start()
+
+    # Jalankan Flask
+    
+    app.run(host="0.0.0.0", port=8080)
