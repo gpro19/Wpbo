@@ -201,7 +201,7 @@ class WattpadBot:
                 keyboard = self.create_keyboard(story_id_str)
                 
                 cover_url = story["cover"]
-                
+
                 responses.append((formatted_info, cover_url, keyboard))
                 processed_stories.add(story_id_str)
                 processed_parts.update(str(part["id"]) for part in story["parts"])
