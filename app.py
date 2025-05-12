@@ -1,3 +1,4 @@
+import asyncio
 import re
 import tempfile
 from datetime import datetime
@@ -299,34 +300,45 @@ async def info(update: Update, context: CallbackContext) -> None:
     )
 
 
+# ... (previous imports remain the same)
+
+
 def run_bot():
-    """Start the bot using polling."""
-    # Initialize bot
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    wattpad_bot = WattpadBot()
+    """Start the bot using polling with a new event loop."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Initialize bot
+        application = Application.builder().token(TELEGRAM_TOKEN).build()
+        wattpad_bot = WattpadBot()
 
-    # Register handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("info", info))
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND, wattpad_bot.handle_message
+        # Register handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("info", info))
+        application.add_handler(
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND, wattpad_bot.handle_message
+            )
         )
-    )
-    application.add_handler(CallbackQueryHandler(wattpad_bot.handle_button_click))
+        application.add_handler(CallbackQueryHandler(wattpad_bot.handle_button_click))
 
-    # Start bot
-    application.run_polling()
+        # Start bot
+        application.run_polling()
+    except Exception as e:
+        logger.error(f"Bot crashed: {e}")
+    finally:
+        loop.close()
 
 
 if __name__ == "__main__":
-    # Jalankan Flask dan bot secara bersamaan
+    # Run Flask and bot in separate threads
     from threading import Thread
 
-    # Jalankan bot di thread terpisah
-    bot_thread = Thread(target=run_bot)
+    # Run bot in a separate thread
+    bot_thread = Thread(target=run_bot, daemon=True)
     bot_thread.start()
 
-    # Jalankan Flask
+    # Run Flask
     port = 8080
     app.run(host="0.0.0.0", port=port)
