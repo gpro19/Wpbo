@@ -1,9 +1,7 @@
-import os
 import re
 import tempfile
 from datetime import datetime
 from typing import Dict, Set
-from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import (
     Application,
@@ -15,11 +13,7 @@ from telegram.ext import (
 )
 import aiohttp
 import logging
-import pypandoc
-from flask import Flask, request
-
-# Load environment variables
-load_dotenv()
+from flask import Flask
 
 # Set up logging
 logging.basicConfig(
@@ -30,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 
-# Bot token from environment variable
+# Bot token (langsung ditulis di sini)
 TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"  # Ganti dengan token bot Anda
 
 class WattpadBot:
@@ -80,25 +74,6 @@ class WattpadBot:
                     return filepath
         return None
 
-    def convert_epub_to_pdf(self, epub_path: str) -> str:
-        """Convert EPUB file to PDF using pypandoc."""
-        try:
-            # Generate PDF path
-            pdf_path = os.path.splitext(epub_path)[0] + ".pdf"
-            
-            # Convert using pypandoc
-            output = pypandoc.convert_file(
-                epub_path,
-                'pdf',
-                outputfile=pdf_path,
-                extra_args=['--pdf-engine=xelatex']
-            )
-            
-            return pdf_path
-        except Exception as e:
-            logger.error(f"Error converting EPUB to PDF: {e}")
-            return None
-
     def format_story_info(self, story: Dict) -> str:
         """Format story information into a readable string."""
         info = f"📖 <b>{story['title']}</b>\n"
@@ -129,8 +104,8 @@ class WattpadBot:
         """Create an inline keyboard with download options."""
         keyboard = [
             [
-                InlineKeyboardButton("📥 Download PDF", callback_data=f"download_{story_id}_pdf"),
-                InlineKeyboardButton("🖼️ PDF with Images", callback_data=f"download_{story_id}_pdf_images"),
+                InlineKeyboardButton("📥 Download EPUB", callback_data=f"download_{story_id}_epub"),
+                InlineKeyboardButton("🖼️ EPUB with Images", callback_data=f"download_{story_id}_epub_images"),
             ],
             [
                 InlineKeyboardButton("🌐 View on Wattpad", url=f"https://wattpad.com/story/{story_id}")
@@ -152,53 +127,46 @@ class WattpadBot:
         await query.edit_message_reply_markup(reply_markup=None)
         
         # Notify user that download is starting
-        message = await query.message.reply_text("⏳ Downloading and converting story, please wait...")
+        message = await query.message.reply_text("⏳ Downloading story, please wait...")
         
         try:
+            # Get story details for the title
+            story_data = await self.get_story(story_id)
+            title = story_data["title"]
+            safe_title = re.sub(r'[\\/*?:"<>|]', "_", title)  # Remove invalid filename characters
+
             # Determine which URL to use based on file type
-            if file_type == "pdf":
+            if file_type == "epub":
                 url = f"{self.host}/download/{story_id}?bot=true&format=epub"
-                filename = f"wattpad_{story_id}.epub"
-                final_filename = f"wattpad_{story_id}.pdf"
-            else:  # pdf_images
+                filename = f"{safe_title}.epub"
+            else:  # epub_images
                 url = f"{self.host}/download/{story_id}?bot=true&format=epub&download_images=true"
-                filename = f"wattpad_{story_id}_with_images.epub"
-                final_filename = f"wattpad_{story_id}_with_images.pdf"
+                filename = f"{safe_title}_with_images.epub"
             
             # Download the EPUB file
-            epub_path = await self.download_file(url, filename)
+            filepath = await self.download_file(url, filename)
             
-            if epub_path:
-                # Convert to PDF
-                pdf_path = self.convert_epub_to_pdf(epub_path)
+            if filepath:
+                # Send the EPUB file to user
+                with open(filepath, 'rb') as file:
+                    await context.bot.send_document(
+                        chat_id=query.message.chat_id,
+                        document=InputFile(file, filename=filename),
+                        caption=f"Here's your downloaded story: {title}"
+                    )
                 
-                if pdf_path:
-                    # Send the PDF to user
-                    with open(pdf_path, 'rb') as file:
-                        await context.bot.send_document(
-                            chat_id=query.message.chat_id,
-                            document=InputFile(file, filename=final_filename),
-                            caption=f"Here's your downloaded story in PDF format: {final_filename}"
-                        )
-                    
-                    # Clean up
-                    os.remove(epub_path)
-                    os.remove(pdf_path)
-                    await message.delete()
-                else:
-                    await message.edit_text("❌ Failed to convert the story to PDF.")
-                    os.remove(epub_path)
+                # Clean up
+                os.remove(filepath)
+                await message.delete()
             else:
                 await message.edit_text("❌ Failed to download the story. Please try again later.")
                 
         except Exception as e:
             logger.error(f"Error handling download: {e}")
-            await message.edit_text("❌ An error occurred while processing the story.")
+            await message.edit_text("❌ An error occurred while downloading the story.")
             # Clean up any remaining files
-            if 'epub_path' in locals() and os.path.exists(epub_path):
-                os.remove(epub_path)
-            if 'pdf_path' in locals() and os.path.exists(pdf_path):
-                os.remove(pdf_path)
+            if 'filepath' in locals() and os.path.exists(filepath):
+                os.remove(filepath)
             
     async def handle_message(self, update: Update, context: CallbackContext) -> None:
         """Handle incoming messages that might contain Wattpad links."""
@@ -297,7 +265,7 @@ async def start(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /start is issued."""
     help_text = (
         "Welcome to Wattpad Story Downloader Bot!\n\n"
-        "Just send me a Wattpad story URL and I'll provide download options in PDF format.\n\n"
+        "Just send me a Wattpad story URL and I'll provide EPUB download options.\n\n"
         "Example URLs I recognize:\n"
         "- https://www.wattpad.com/story/12345678\n"
         "- https://www.wattpad.com/98765432\n\n"
@@ -310,14 +278,14 @@ async def info(update: Update, context: CallbackContext) -> None:
     """Send bot information."""
     info_text = (
         "📚 <b>Wattpad Story Downloader Bot</b>\n\n"
-        "This bot helps you easily download Wattpad stories in PDF format.\n\n"
+        "This bot helps you easily download Wattpad stories in EPUB format.\n\n"
         "Features:\n"
-        "- Convert Wattpad stories to PDF\n"
+        "- Download Wattpad stories as EPUB\n"
         "- Option to include images\n"
-        "- Preserve story formatting\n\n"
+        "- Preserve original formatting\n\n"
         "Credits:\n"
         "- Original idea by AaronBenDaniel\n"
-        "- PDF conversion implementation"
+        "- Telegram implementation"
     )
     
     keyboard = InlineKeyboardMarkup(
@@ -333,13 +301,6 @@ async def info(update: Update, context: CallbackContext) -> None:
 
 def run_bot():
     """Start the bot using polling."""
-    # Check if pandoc is installed
-    try:
-        pypandoc.get_pandoc_version()
-    except OSError:
-        logger.error("Pandoc is not installed. Please install pandoc first.")
-        raise
-    
     # Initialize bot
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     wattpad_bot = WattpadBot()
@@ -367,5 +328,5 @@ if __name__ == "__main__":
     bot_thread.start()
 
     # Jalankan Flask
-    
-    app.run(host="0.0.0.0", port=8080)
+    port = 8080
+    app.run(host="0.0.0.0", port=port)
