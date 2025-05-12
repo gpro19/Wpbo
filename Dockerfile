@@ -5,6 +5,7 @@ FROM python:3.9-slim
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 ENV DEBIAN_FRONTEND noninteractive
+ENV PORT 8080
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -24,7 +25,7 @@ COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Make port 8080 available to the world outside this container
-EXPOSE 8080
+EXPOSE $PORT
 
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "app:app"]
+# Run the application using Flask's built-in server
+CMD ["python", "app.py"]
