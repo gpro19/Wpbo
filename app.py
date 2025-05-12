@@ -84,7 +84,7 @@ class WattpadBot:
 
         last_updated = datetime.strptime(story["modifyDate"], "%Y-%m-%dT%H:%M:%SZ")
         info += f"✅ Completed on {last_updated.strftime('%Y-%m-%d')}" if story["completed"] else f"🚧 Last updated on {last_updated.strftime('%Y-%m-%d')}"
-
+        
         if story["mature"]:
             info += " 🚸 Mature Content\n"
 
@@ -288,11 +288,12 @@ async def main():
 
 
 if __name__ == "__main__":
-    from threading import Thread
+    loop = asyncio.get_event_loop()
     
     # Run Flask in a separate thread
+    from threading import Thread
     flask_thread = Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': 8080})
     flask_thread.start()
-
+    
     # Run the bot in the main thread
-    asyncio.run(main())
+    loop.run_until_complete(main())
