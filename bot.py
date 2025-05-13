@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 flask_app = Flask(__name__)
 
 # Token Bot Telegram
-TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"  # Ganti dengan token Anda
+TELEGRAM_TOKEN = "7619753860:AAHDPdB12JDzsTyj2Q1CWOJV6y4ol0XXCfw"  # Ganti dengan token Anda
+
+# Channel ID untuk log
+LOG_CHANNEL_ID = "-1002594638851"  # Ganti dengan channel log Anda
 
 class WattpadBot:
     def __init__(self):
@@ -55,12 +58,8 @@ class WattpadBot:
         
         keyboard = [
             [
-                InlineKeyboardButton("📥 Fast Download (EPUB)", 
-                                   callback_data=f"dl_{safe_id}_epub"),                
-            ],
-            [             
-                InlineKeyboardButton("🖼️ Include Images (Slower)", 
-                                   callback_data=f"dl_{safe_id}_epub-images"),
+                InlineKeyboardButton("📥 Download EPUB", 
+                                   callback_data=f"dl_{safe_id}_epub"),
             ],
             [
                 InlineKeyboardButton("🌐 View on Wattpad", 
@@ -86,19 +85,13 @@ class WattpadBot:
             
         return details
 
-    def download_epub(self, story_id, include_images=False):
+    def download_epub(self, story_id):
         """Download EPUB file dari Wattpad"""
         params = {
             'format': 'epub',
             'bot': 'true',
             'mode': 'story'
         }
-        
-        if include_images:
-            params.update({
-                'download_images': 'true',
-                'om': '1'
-            })
         
         try:
             url = f"{self.base_url}/download/{story_id}"
@@ -110,6 +103,27 @@ class WattpadBot:
             logger.error(f"Download error: {e}")
             return None
 
+    def log_to_channel(self, context: CallbackContext, user_id: int, username: str, story_id: str, title: str):
+        """Mengirim log ke channel"""
+        try:
+            log_message = (
+                f"📥 Download Log\n\n"
+                f"👤 User: [{username}](tg://user?id={user_id})\n"
+                f"🆔 ID: {user_id}\n"
+                f"📖 Story: [{title}](https://www.wattpad.com/story/{story_id})\n"
+                f"🆔 Story ID: {story_id}\n"
+                f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            
+            context.bot.send_message(
+                chat_id=LOG_CHANNEL_ID,
+                text=log_message,
+                parse_mode='Markdown',
+                disable_web_page_preview=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to send log to channel: {e}")
+
     def handle_callback_query(self, update: Update, context: CallbackContext):
         """Menangani callback dari inline keyboard"""
         query = update.callback_query
@@ -120,7 +134,7 @@ class WattpadBot:
             _, story_id, file_type = query.data.split('_', 2)
             story_id = story_id.replace('-', '_')  # Kembalikan ID ke format asli
             
-            if file_type not in ['epub', 'epub-images']:
+            if file_type != 'epub':
                 raise ValueError("Invalid file type")
                 
         except Exception as e:
@@ -141,16 +155,10 @@ class WattpadBot:
             # Membuat nama file yang aman
             title = re.sub(r'[\\/*?:"<>|]', '_', story_info['title'])
             watermark = "@WattpadToEPUBbot"
-            
-            if file_type == 'epub-images':
-                filename = f"{title}_with_images({watermark}).epub"
-                include_images = True
-            else:
-                filename = f"{title}({watermark}).epub"
-                include_images = False
+            filename = f"{title} ({watermark}).epub"
             
             # Download file
-            response = self.download_epub(story_id, include_images)
+            response = self.download_epub(story_id)
             if not response:
                 processing_msg.edit_text("❌ Download failed. Please try again later.")
                 return
@@ -164,13 +172,20 @@ class WattpadBot:
             
             # Kirim file ke user
             with open(filepath, 'rb') as f:
-                caption = f"📚 {story_info['title']}\n"
-                caption += "✅ With images" if include_images else "⚡ Fast download"
-                
                 message.reply_document(
                     document=InputFile(f, filename=filename),
-                    caption=caption
+                    caption=f"📚 {story_info['title']}\n⚡ Downloaded via @WattpadToEPUBbot"
                 )
+            
+            # Kirim log ke channel
+            user = query.from_user
+            self.log_to_channel(
+                context=context,
+                user_id=user.id,
+                username=user.username or user.first_name,
+                story_id=story_id,
+                title=story_info['title']
+            )
             
             # Hapus pesan processing
             processing_msg.delete()
@@ -226,20 +241,6 @@ class WattpadBot:
 @flask_app.route('/')
 def home():
     return "Wattpad to EPUB Bot is running!"
-
-# Command Handlers
-def start_command(update: Update, context: CallbackContext):
-    """Handler untuk command /start"""
-    help_text = (
-        "📚 *Wattpad to EPUB Bot*\n\n"
-        "Send me a Wattpad story URL and I'll convert it to EPUB format.\n\n"
-        "Features:\n"
-        "- Fast EPUB download\n"
-        "- Option to include images\n"
-        "- Preserves story formatting\n\n"
-        "Just send me a Wattpad link to get started!"
-    )
-    update.message.reply_text(help_text, parse_mode='Markdown')
 
 def main():
     """Entry point untuk aplikasi"""
