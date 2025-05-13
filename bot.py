@@ -2,7 +2,7 @@ import re
 import tempfile
 import os
 from datetime import datetime
-from typing import Dict, Set
+from typing import Dict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import (
     Updater,
@@ -17,23 +17,19 @@ import logging
 from flask import Flask
 import threading
 
-# Set up logging
+# Logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Flask app
+# Flask
 flask_app = Flask(__name__)
-
-# Bot token
-TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"  # Ganti dengan token bot Anda
+TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"  # Ganti dengan token Anda
 
 class WattpadBot:
     def __init__(self):
         self.headers = {"user-agent": "WPDTelegramBot"}
         self.host = "https://wpd.rambhat.la"
         self.temp_dir = tempfile.gettempdir()
-
-        # URL patterns
         self.story_pattern = r"wattpad\.com/story/(\d+)"
         self.part_pattern = r"wattpad\.com/(\d+)"
 
@@ -53,7 +49,7 @@ class WattpadBot:
         filepath = os.path.join(self.temp_dir, filename)
         response = requests.get(url, headers=self.headers, stream=True)
         if response.status_code == 200:
-            with open(filepath, 'wb') as f:
+            with open(filepath, "wb") as f:
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
             return filepath
@@ -61,25 +57,27 @@ class WattpadBot:
 
     def format_story_info(self, story: Dict) -> str:
         info = f"📖 <b>{story['title']}</b>\n"
-        info += f"👤 Author: {story['user']['name']}\n\n"
+        info += f"👤 Author: {story['user']['name']}\n"
         info += f"👀 Reads: {story['readCount']:,}\n"
         info += f"⭐ Votes: {story['voteCount']:,}\n"
-        info += f"🗨️ Comments: {story['commentCount']:,}\n\n"
         info += f"🔖 Parts: {story['numParts']}\n"
-        info += f"🌏 Language: {story['language']['name']}\n\n"
-
-        last_updated = datetime.strptime(story["modifyDate"], "%Y-%m-%dT%H:%M:%SZ")
-        info += f"✅ Completed on {last_updated.strftime('%Y-%m-%d')}" if story["completed"] else f"🚧 Last updated on {last_updated.strftime('%Y-%m-%d')}"
         
+        last_updated = datetime.strptime(story["modifyDate"], "%Y-%m-%dT%H:%M:%SZ")
+        info += f"📅 Last Updated: {last_updated.strftime('%Y-%m-%d')}\n"
+        if story["completed"]:
+            info += "✅ Completed\n"
         if story["mature"]:
-            info += " 🚸 Mature Content\n"
+            info += "🔞 Mature Content\n"
         return info
 
     def create_keyboard(self, story_id: int) -> InlineKeyboardMarkup:
+        # Ganti "_" di story_id dengan "-" untuk hindari split error
+        safe_story_id = str(story_id).replace("_", "-")
+        
         keyboard = [
             [
-                InlineKeyboardButton("📥 Download EPUB", callback_data=f"download_{story_id}_epub"),
-                InlineKeyboardButton("🖼️ EPUB with Images", callback_data=f"download_{story_id}_epub_images"),
+                InlineKeyboardButton("📥 Download EPUB", callback_data=f"download_{safe_story_id}_epub"),
+                InlineKeyboardButton("🖼️ EPUB with Images", callback_data=f"download_{safe_story_id}_epub-images"),  # Pakai "-"
             ],
             [
                 InlineKeyboardButton("🌐 View on Wattpad", url=f"https://wattpad.com/story/{story_id}")
@@ -92,50 +90,60 @@ class WattpadBot:
         query.answer()
         
         data = query.data
-        if not data.startswith('download_'):
+        if not data.startswith("download_"):
             return
-            
-        _, story_id, file_type = data.split('_')
-        query.edit_message_reply_markup(reply_markup=None)
+
+        # Handle split dengan maxsplit=2 (format: "download_{story_id}_{file_type}")
+        parts = data.split("_", maxsplit=2)
+        if len(parts) != 3:
+            query.message.reply_text("⚠️ Invalid download request.")
+            return
+
+        _, story_id, file_type = parts
+        story_id = story_id.replace("-", "_")  # Kembalikan ke format asli
         
-        message = query.message.reply_text("⏳ Downloading story, please wait...")
+        # Konversi "epub-images" ke "epub_images" untuk URL
+        if file_type == "epub-images":
+            file_type = "epub_images"
+
+        msg = query.message.reply_text("⏳ Downloading...")
         
         try:
-            story_data = self.get_story(story_id)
-            title = story_data["title"]
-            safe_title = re.sub(r'[\\/*?:"<>|]', "_", title)
-
+            story = self.get_story(story_id)
+            title = re.sub(r'[\\/*?:"<>|]', "_", story["title"])
+            
             if file_type == "epub":
                 url = f"{self.host}/download/{story_id}?bot=true&format=epub"
-                filename = f"{safe_title}.epub"
-            else:  # epub_images
+                filename = f"{title}.epub"
+            elif file_type == "epub_images":
                 url = f"{self.host}/download/{story_id}?bot=true&format=epub&download_images=true"
-                filename = f"{safe_title}_with_images.epub"
-            
+                filename = f"{title}_with_images.epub"
+            else:
+                msg.edit_text("❌ Invalid file type.")
+                return
+
             filepath = self.download_file(url, filename)
-            
             if filepath:
-                with open(filepath, 'rb') as file:
+                with open(filepath, "rb") as file:
                     context.bot.send_document(
                         chat_id=query.message.chat_id,
                         document=InputFile(file, filename=filename),
-                        caption=f"Here's your downloaded story: {title}"
+                        caption=f"📚 {story['title']}"
                     )
-                
                 os.remove(filepath)
-                message.delete()
+                msg.delete()
             else:
-                message.edit_text("❌ Failed to download the story. Please try again later.")
+                msg.edit_text("❌ Failed to download. Try again.")
                 
         except Exception as e:
-            logger.error(f"Error handling download: {e}")
-            message.edit_text("❌ An error occurred while downloading the story.")
-            if 'filepath' in locals() and os.path.exists(filepath):
+            logger.error(f"Download error: {e}")
+            msg.edit_text("🚨 An error occurred. Please try later.")
+            if "filepath" in locals() and os.path.exists(filepath):
                 os.remove(filepath)
-            
+
     def handle_message(self, update: Update, context: CallbackContext) -> None:
         message = update.message
-        if message.from_user.is_bot:
+        if not message or message.from_user.is_bot:
             return
 
         text = message.text or message.caption
@@ -145,111 +153,53 @@ class WattpadBot:
         story_ids = set(re.findall(self.story_pattern, text))
         part_ids = set(re.findall(self.part_pattern, text))
 
-        if not story_ids and not part_ids:
-            return
-
-        processed_parts = set()
-        processed_stories = set()
-        responses = []
-
         for story_id in story_ids:
             try:
-                data = self.get_story(story_id)
-                story_id_str = str(data["id"])
-                
-                if story_id_str in processed_stories:
-                    continue
-                
-                formatted_info = self.format_story_info(data)
-                keyboard = self.create_keyboard(story_id_str)
-                cover_url = data["cover"]
-                
-                responses.append((formatted_info, cover_url, keyboard))
-                processed_stories.add(story_id_str)
-                processed_parts.update(str(part["id"]) for part in data["parts"])
-                
+                story = self.get_story(story_id)
+                message.reply_photo(
+                    photo=story["cover"],
+                    caption=self.format_story_info(story),
+                    reply_markup=self.create_keyboard(story["id"]),
+                    parse_mode="HTML"
+                )
             except Exception as e:
-                logger.error(f"Error processing story {story_id}: {e}")
+                logger.error(f"Story error: {e}")
 
         for part_id in part_ids:
-            if part_id in processed_parts:
-                continue
-                
             try:
-                data = self.get_story_from_part(part_id)
-                story = data["group"]
-                story_id_str = str(story["id"])
-                
-                formatted_info = self.format_story_info(story)
-                keyboard = self.create_keyboard(story_id_str)
-                cover_url = story["cover"]
-
-                responses.append((formatted_info, cover_url, keyboard))
-                processed_stories.add(story_id_str)
-                processed_parts.update(str(part["id"]) for part in story["parts"])
-                
-            except Exception as e:
-                logger.error(f"Error processing part {part_id}: {e}")
-
-        for info, cover_url, keyboard in responses:
-            try:
+                part_data = self.get_story_from_part(part_id)
+                story = part_data["group"]
                 message.reply_photo(
-                    photo=cover_url,
-                    caption=info,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
+                    photo=story["cover"],
+                    caption=self.format_story_info(story),
+                    reply_markup=self.create_keyboard(story["id"]),
+                    parse_mode="HTML"
                 )
             except Exception as e:
-                logger.error(f"Error sending response: {e}")
-                message.reply_text(
-                    info, reply_markup=keyboard, parse_mode="HTML"
-                )
+                logger.error(f"Part error: {e}")
 
-
-@flask_app.route('/')
+@flask_app.route("/")
 def home():
     return "Wattpad Bot is running!"
 
-
-def start(update: Update, context: CallbackContext) -> None:
-    help_text = (
-        "Welcome to Wattpad Story Downloader Bot!\n\n"
-        "Just send me a Wattpad story URL and I'll provide EPUB download options.\n\n"
-        "Example URLs I recognize:\n"
-        "- https://www.wattpad.com/story/12345678\n"
-        "- https://www.wattpad.com/98765432\n"
+def start(update: Update, context: CallbackContext):
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="🔍 Send a Wattpad story URL to download it as EPUB!"
     )
-    context.bot.send_message(chat_id=update.message.chat_id, text=help_text)
-
-
-def info(update: Update, context: CallbackContext) -> None:
-    info_text = (
-        "📚 <b>Wattpad Story Downloader Bot</b>\n\n"
-        "This bot downloads Wattpad stories in EPUB format.\n"
-        "Source: github.com/TheOnlyWayUp/WPDBot"
-    )
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 Source Code", url="https://github.com/TheOnlyWayUp/WPDBot")]])
-    context.bot.send_message(chat_id=update.message.chat_id, text=info_text, reply_markup=keyboard, parse_mode="HTML")
-
 
 def main():
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
-    wattpad_bot = WattpadBot()
+    bot = WattpadBot()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("info", info))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, wattpad_bot.handle_message))
-    dp.add_handler(CallbackQueryHandler(wattpad_bot.handle_button_click))
+    dispatcher = updater.dispatcher
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, bot.handle_message))
+    dispatcher.add_handler(CallbackQueryHandler(bot.handle_button_click))
 
+    threading.Thread(target=lambda: flask_app.run(host="0.0.0.0", port=8000), daemon=True).start()
     updater.start_polling()
     updater.idle()
 
-
-def run_flask():
-    flask_app.run(host='0.0.0.0', port=8000)
-
-
-if __name__ == '__main__':
-    threading.Thread(target=run_flask, daemon=True).start()
+if __name__ == "__main__":
     main()
