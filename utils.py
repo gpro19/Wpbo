@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import time
-from .database import DatabaseManager
+from database import DatabaseManager
 
 def scheduled_reset():
     """Task terjadwal untuk reset quota harian"""
