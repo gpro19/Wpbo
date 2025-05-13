@@ -2,9 +2,9 @@ import logging
 from flask import Flask
 import threading
 from telegram.ext import Updater
-from .config import TELEGRAM_TOKEN
-from .database import DatabaseManager
-from .handlers import start_command
+from config import TELEGRAM_TOKEN, LOG_CHANNEL_ID
+from database import DatabaseManager
+from handlers import start_command
 
 # Konfigurasi Logging
 logging.basicConfig(
