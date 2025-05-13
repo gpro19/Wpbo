@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime
-from .config import DATABASE_NAME
+from config import DATABASE_NAME
 
 class DatabaseManager:
     def __init__(self, db_name=DATABASE_NAME):
