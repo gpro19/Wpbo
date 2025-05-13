@@ -30,7 +30,7 @@ admins_collection = db["admins"]
 
 # Token Bot Telegram
 TOKEN = "7619753860:AAHDPdB12JDzsTyj2Q1CWOJV6y4ol0XXCfw"  # Ganti dengan token Anda
-ADMIN_CHAT_ID = 1910497806  # Ganti dengan chat ID admin
+ADMIN_CHAT_ID = "1910497806"  # Ganti dengan chat ID admin
 ADMIN_USERNAME = "@MzCoder"  # Ganti dengan username admin
 LOG_CHANNEL_ID = "-1002594638851"  # Ganti dengan channel log Anda
 
@@ -96,7 +96,8 @@ def start(update: Update, context: CallbackContext):
         f"(1 quota harian + {user['extra_quota']} quota tambahan)\n\n"
         "Kirim link cerita Wattpad untuk mendapatkan EPUB.\n"
         "Quota harian direset tiap hari pukul 00:00 WIB.\n"
-        "Gunakan /beli untuk quota tambahan."
+        "Gunakan /beli untuk quota tambahan.",
+        parse_mode="Markdown"
     )
 
 def beli_quota(update: Update, context: CallbackContext):
@@ -116,8 +117,14 @@ def beli_quota(update: Update, context: CallbackContext):
     )
     update.message.reply_text(harga, parse_mode="Markdown")
 
+
 def admin_tambah_quota(update: Update, context: CallbackContext):
-    if str(update.effective_chat.id) != ADMIN_CHAT_ID:
+    """Perintah admin untuk menambah quota"""
+    # Debug: Print admin info
+    logger.info(f"User ID: {update.effective_user.id}, Chat ID: {update.effective_chat.id}")
+    
+    # More flexible admin check
+    if update.effective_user.id != ADMIN_CHAT_ID and update.effective_chat.id != ADMIN_CHAT_ID:
         update.message.reply_text("❌ Hanya untuk admin!")
         return
     
@@ -128,11 +135,14 @@ def admin_tambah_quota(update: Update, context: CallbackContext):
         update.message.reply_text("Format: /addquota [user_id] [jumlah_quota]")
         return
     
+    # Update quota
     update_user_quota(user_id, jumlah)
     
+    # Get updated user data
     user = get_user(user_id)
     total_quota = user["daily_quota"] + user["extra_quota"]
     
+    # Send notification to user
     context.bot.send_message(
         chat_id=user_id,
         text=f"✅ Admin telah menambahkan *{jumlah} Quota*!\n"
@@ -143,15 +153,6 @@ def admin_tambah_quota(update: Update, context: CallbackContext):
     
     update.message.reply_text(f"✅ Berhasil menambahkan {jumlah} quota untuk user {user_id}")
 
-def cek_quota(update: Update, context: CallbackContext):
-    user = get_user(update.effective_user.id)
-    total_quota = user["daily_quota"] + user["extra_quota"]
-    
-    update.message.reply_text(
-        f"🔄 Quota Anda saat ini: *{total_quota}*\n"
-        f"(1 harian + {user['extra_quota']} tambahan)",
-        parse_mode="Markdown"
-    )
 
 class WattpadBot:
     def __init__(self):
@@ -259,7 +260,8 @@ class WattpadBot:
         total_quota = user["daily_quota"] + user["extra_quota"]
         
         if total_quota <= 0:
-            query.edit_message_text(
+            query.delete()
+            query.message.reply_text(
                 "❌ Quota Anda habis!\n"
                 "Quota harian akan direset besok pukul 00:00 WIB.\n"
                 "Gunakan /beli untuk quota tambahan."
@@ -285,7 +287,7 @@ class WattpadBot:
             
             title = re.sub(r'[\\/*?:"<>|]', '_', story_info['title'])
             watermark = "@WattpadToEPUBbot"
-            filename = f"{title}({watermark}).epub"
+            filename = f"{title} ({watermark}).epub"
             
             response = self.download_epub(story_id)
             if not response:
