@@ -30,7 +30,7 @@ admins_collection = db["admins"]
 
 # Token Bot Telegram
 TOKEN = "7619753860:AAHDPdB12JDzsTyj2Q1CWOJV6y4ol0XXCfw"  # Ganti dengan token Anda
-ADMIN_CHAT_ID = "1910497806"  # Ganti dengan chat ID admin
+ADMIN_CHAT_ID = 1910497806  # Ganti dengan chat ID admin
 ADMIN_USERNAME = "@MzCoder"  # Ganti dengan username admin
 LOG_CHANNEL_ID = "-1002594638851"  # Ganti dengan channel log Anda
 
