@@ -271,8 +271,7 @@ class WattpadBot:
                 chat_id=LOG_CHANNEL_ID,
                 document=InputFile(f),
                 caption=log_caption,
-                parse_mode='Markdown',
-                disable_web_page_preview=True
+                parse_mode='Markdown'       
             )
             
         except Exception as e:
