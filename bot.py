@@ -266,9 +266,8 @@ class WattpadBot:
                 f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             
-            
             with open(file_path, 'rb') as f:
-            context.bot.send_document(
+                context.bot.send_document(
                 chat_id=LOG_CHANNEL_ID,
                 document=InputFile(f),
                 caption=log_caption,
