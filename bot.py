@@ -1,4 +1,3 @@
-import asyncio
 import re
 import tempfile
 import os
@@ -6,68 +5,58 @@ from datetime import datetime
 from typing import Dict, Set
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import (
-    Application,
+    Updater,
     CommandHandler,
     MessageHandler,
-    filters,
+    Filters,
     CallbackContext,
     CallbackQueryHandler,
 )
-import aiohttp
+import requests
 import logging
 from flask import Flask
 import threading
 
 # Set up logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 flask_app = Flask(__name__)
 
-# Bot token (langsung ditulis di sini)
+# Bot token
 TELEGRAM_TOKEN = "8079725112:AAF6lX0qvwz-dTkAkXmpHV1ZDdzcrxDBJWk"  # Ganti dengan token bot Anda
 
 class WattpadBot:
     def __init__(self):
         self.headers = {"user-agent": "WPDTelegramBot"}
-        self.host = "https://wpd.rambhat.la"  # Base URL for download endpoints
-        self.host = self.host.rstrip("/")  # Remove trailing slash
+        self.host = "https://wpd.rambhat.la"
         self.temp_dir = tempfile.gettempdir()
 
-        # Patterns to detect Wattpad URLs
+        # URL patterns
         self.story_pattern = r"wattpad\.com/story/(\d+)"
         self.part_pattern = r"wattpad\.com/(\d+)"
 
-    async def get_story(self, story_id: int) -> Dict:
-        async with aiohttp.ClientSession(headers=self.headers, raise_for_status=True) as session:
-            async with session.get(
-                f"https://www.wattpad.com/api/v3/stories/{story_id}?fields=id,cover,readCount,voteCount,commentCount,modifyDate,numParts,language(name),user(name),completed,mature,title,parts(id)"
-            ) as response:
-                return await response.json()
+    def get_story(self, story_id: int) -> Dict:
+        url = f"https://www.wattpad.com/api/v3/stories/{story_id}?fields=id,cover,readCount,voteCount,commentCount,modifyDate,numParts,language(name),user(name),completed,mature,title,parts(id)"
+        response = requests.get(url, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
 
-    async def get_story_from_part(self, part_id: int) -> Dict:
-        async with aiohttp.ClientSession(headers=self.headers, raise_for_status=True) as session:
-            async with session.get(
-                f"https://www.wattpad.com/api/v3/story_parts/{part_id}?fields=groupId,group(cover,readCount,voteCount,commentCount,modifyDate,numParts,language(name),user(name),completed,mature,title,parts(id))"
-            ) as response:
-                return await response.json()
+    def get_story_from_part(self, part_id: int) -> Dict:
+        url = f"https://www.wattpad.com/api/v3/story_parts/{part_id}?fields=groupId,group(cover,readCount,voteCount,commentCount,modifyDate,numParts,language(name),user(name),completed,mature,title,parts(id))"
+        response = requests.get(url, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
 
-    async def download_file(self, url: str, filename: str) -> str:
+    def download_file(self, url: str, filename: str) -> str:
         filepath = os.path.join(self.temp_dir, filename)
-        
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    with open(filepath, 'wb') as f:
-                        while True:
-                            chunk = await response.content.read(1024)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                    return filepath
+        response = requests.get(url, headers=self.headers, stream=True)
+        if response.status_code == 200:
+            with open(filepath, 'wb') as f:
+                for chunk in response.iter_content(1024):
+                    f.write(chunk)
+            return filepath
         return None
 
     def format_story_info(self, story: Dict) -> str:
@@ -84,7 +73,6 @@ class WattpadBot:
         
         if story["mature"]:
             info += " 🚸 Mature Content\n"
-
         return info
 
     def create_keyboard(self, story_id: int) -> InlineKeyboardMarkup:
@@ -99,22 +87,21 @@ class WattpadBot:
         ]
         return InlineKeyboardMarkup(keyboard)
 
-    async def handle_button_click(self, update: Update, context: CallbackContext) -> None:
+    def handle_button_click(self, update: Update, context: CallbackContext) -> None:
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
         data = query.data
         if not data.startswith('download_'):
             return
             
         _, story_id, file_type = data.split('_')
+        query.edit_message_reply_markup(reply_markup=None)
         
-        await query.edit_message_reply_markup(reply_markup=None)
-        
-        message = await query.message.reply_text("⏳ Downloading story, please wait...")
+        message = query.message.reply_text("⏳ Downloading story, please wait...")
         
         try:
-            story_data = await self.get_story(story_id)
+            story_data = self.get_story(story_id)
             title = story_data["title"]
             safe_title = re.sub(r'[\\/*?:"<>|]', "_", title)
 
@@ -125,28 +112,28 @@ class WattpadBot:
                 url = f"{self.host}/download/{story_id}?bot=true&format=epub&download_images=true"
                 filename = f"{safe_title}_with_images.epub"
             
-            filepath = await self.download_file(url, filename)
+            filepath = self.download_file(url, filename)
             
             if filepath:
                 with open(filepath, 'rb') as file:
-                    await context.bot.send_document(
+                    context.bot.send_document(
                         chat_id=query.message.chat_id,
                         document=InputFile(file, filename=filename),
                         caption=f"Here's your downloaded story: {title}"
                     )
                 
                 os.remove(filepath)
-                await message.delete()
+                message.delete()
             else:
-                await message.edit_text("❌ Failed to download the story. Please try again later.")
+                message.edit_text("❌ Failed to download the story. Please try again later.")
                 
         except Exception as e:
             logger.error(f"Error handling download: {e}")
-            await message.edit_text("❌ An error occurred while downloading the story.")
+            message.edit_text("❌ An error occurred while downloading the story.")
             if 'filepath' in locals() and os.path.exists(filepath):
                 os.remove(filepath)
             
-    async def handle_message(self, update: Update, context: CallbackContext) -> None:
+    def handle_message(self, update: Update, context: CallbackContext) -> None:
         message = update.message
         if message.from_user.is_bot:
             return
@@ -155,8 +142,8 @@ class WattpadBot:
         if not text:
             return
 
-        story_ids: Set[str] = set(re.findall(self.story_pattern, text))
-        part_ids: Set[str] = set(re.findall(self.part_pattern, text))
+        story_ids = set(re.findall(self.story_pattern, text))
+        part_ids = set(re.findall(self.part_pattern, text))
 
         if not story_ids and not part_ids:
             return
@@ -167,7 +154,7 @@ class WattpadBot:
 
         for story_id in story_ids:
             try:
-                data = await self.get_story(story_id)
+                data = self.get_story(story_id)
                 story_id_str = str(data["id"])
                 
                 if story_id_str in processed_stories:
@@ -175,7 +162,6 @@ class WattpadBot:
                 
                 formatted_info = self.format_story_info(data)
                 keyboard = self.create_keyboard(story_id_str)
-
                 cover_url = data["cover"]
                 
                 responses.append((formatted_info, cover_url, keyboard))
@@ -190,16 +176,12 @@ class WattpadBot:
                 continue
                 
             try:
-                data = await self.get_story_from_part(part_id)
+                data = self.get_story_from_part(part_id)
                 story = data["group"]
                 story_id_str = str(story["id"])
                 
-                if story_id_str in processed_stories:
-                    continue
-                
                 formatted_info = self.format_story_info(story)
                 keyboard = self.create_keyboard(story_id_str)
-                
                 cover_url = story["cover"]
 
                 responses.append((formatted_info, cover_url, keyboard))
@@ -211,7 +193,7 @@ class WattpadBot:
 
         for info, cover_url, keyboard in responses:
             try:
-                await message.reply_photo(
+                message.reply_photo(
                     photo=cover_url,
                     caption=info,
                     reply_markup=keyboard,
@@ -219,7 +201,7 @@ class WattpadBot:
                 )
             except Exception as e:
                 logger.error(f"Error sending response: {e}")
-                await message.reply_text(
+                message.reply_text(
                     info, reply_markup=keyboard, parse_mode="HTML"
                 )
 
@@ -229,64 +211,45 @@ def home():
     return "Wattpad Bot is running!"
 
 
-async def start(update: Update, context: CallbackContext) -> None:
+def start(update: Update, context: CallbackContext) -> None:
     help_text = (
         "Welcome to Wattpad Story Downloader Bot!\n\n"
         "Just send me a Wattpad story URL and I'll provide EPUB download options.\n\n"
         "Example URLs I recognize:\n"
         "- https://www.wattpad.com/story/12345678\n"
-        "- https://www.wattpad.com/98765432\n\n"
-        "You can also use me in groups - I'll automatically detect Wattpad links!"
+        "- https://www.wattpad.com/98765432\n"
     )
-    await update.message.reply_text(help_text)
+    context.bot.send_message(chat_id=update.message.chat_id, text=help_text)
 
 
-async def info(update: Update, context: CallbackContext) -> None:
+def info(update: Update, context: CallbackContext) -> None:
     info_text = (
         "📚 <b>Wattpad Story Downloader Bot</b>\n\n"
-        "This bot helps you easily download Wattpad stories in EPUB format.\n\n"
-        "Features:\n"
-        "- Download Wattpad stories as EPUB\n"
-        "- Option to include images\n"
-        "- Preserve original formatting\n\n"
-        "Credits:\n"
-        "- Original idea by AaronBenDaniel\n"
-        "- Telegram implementation"
+        "This bot downloads Wattpad stories in EPUB format.\n"
+        "Source: github.com/TheOnlyWayUp/WPDBot"
     )
-    
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("👨‍💻 Source Code", url="https://github.com/TheOnlyWayUp/WPDBot")]]
-    )
-    
-    await update.message.reply_text(
-        info_text, 
-        reply_markup=keyboard, 
-        parse_mode="HTML"
-    )
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 Source Code", url="https://github.com/TheOnlyWayUp/WPDBot")]])
+    context.bot.send_message(chat_id=update.message.chat_id, text=info_text, reply_markup=keyboard, parse_mode="HTML")
 
 
-async def main():
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+def main():
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    dp = updater.dispatcher
     wattpad_bot = WattpadBot()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("info", info))
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, wattpad_bot.handle_message)
-    )
-    application.add_handler(CallbackQueryHandler(wattpad_bot.handle_button_click))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("info", info))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, wattpad_bot.handle_message))
+    dp.add_handler(CallbackQueryHandler(wattpad_bot.handle_button_click))
 
-    await application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 
 def run_flask():
-    """Run the Flask app."""
     flask_app.run(host='0.0.0.0', port=8000)
 
 
 if __name__ == '__main__':
-    # Start Flask in a separate thread
     threading.Thread(target=run_flask, daemon=True).start()
-    
-    # Run the bot in the main thread
-    asyncio.run(main())
+    main()
