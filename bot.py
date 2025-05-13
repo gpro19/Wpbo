@@ -153,6 +153,16 @@ def admin_tambah_quota(update: Update, context: CallbackContext):
     
     update.message.reply_text(f"✅ Berhasil menambahkan {jumlah} quota untuk user {user_id}")
 
+def cek_quota(update: Update, context: CallbackContext):
+    user = get_user(update.effective_user.id)
+    total_quota = user["daily_quota"] + user["extra_quota"]
+    
+    update.message.reply_text(
+        f"🔄 Quota Anda saat ini: *{total_quota}*\n"
+        f"(1 harian + {user['extra_quota']} tambahan)",
+        parse_mode="Markdown"
+    )
+
 
 class WattpadBot:
     def __init__(self):
