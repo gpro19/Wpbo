@@ -91,14 +91,34 @@ def start(update: Update, context: CallbackContext):
     total_quota = user["daily_quota"] + user["extra_quota"]
     
     update.message.reply_text(
-        f"📚 *Wattpad to EPUB Bot*\n\n"
-        f"🔄 Quota Anda hari ini: *{total_quota}*\n"
-        f"(1 quota harian + {user['extra_quota']} quota tambahan)\n\n"
-        "Kirim link cerita Wattpad untuk mendapatkan EPUB.\n"
-        "Quota harian direset tiap hari pukul 00:00 WIB.\n"
+        "Wattpad to EPUB Bot\n\n"
+        "Selamat datang! Gunakan bot ini untuk mengunduh cerita Wattpad dalam format EPUB.\n\n"
+        "Quota Anda hari ini: *{}*\n"
+        "(1 quota harian + {} quota tambahan)\n\n"
+        "Untuk menggunakan bot ini, Anda WAJIB:\n"
+        "1. Subscribe channel kami: [Channel Name](https://t.me/channel_name)\n"
+        "2. Join grup kami: [Group Name](https://t.me/group_name)\n\n"
+        "Kirim link cerita Wattpad untuk memulai. Quota harian direset setiap hari pukul 00:00 WIB.\n"
         "Gunakan /beli untuk quota tambahan.",
         parse_mode="Markdown"
     )
+    
+def help(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        "Bantuan Penggunaan Bot\n\n"
+        "Berikut adalah daftar perintah yang tersedia:\n"
+        "/start - Memulai bot dan menampilkan informasi dasar\n"
+        "/help - Menampilkan pesan bantuan ini\n"
+        "/quota - Mengecek quota Anda\n"
+        "/beli - Membeli quota tambahan\n\n"
+        "Cara menggunakan bot:\n"
+        "1. Pastikan Anda sudah subscribe channel kami dan join grup kami.\n"
+        "2. Kirim link cerita Wattpad yang ingin Anda unduh.\n"
+        "3. Ikuti petunjuk yang diberikan oleh bot.\n\n"
+        "Jika Anda mengalami masalah, hubungi admin: {}".format(ADMIN_USERNAME),
+        parse_mode="Markdown"
+    )
+
 
 def beli_quota(update: Update, context: CallbackContext):
     user = update.effective_user
@@ -145,9 +165,8 @@ def admin_tambah_quota(update: Update, context: CallbackContext):
     # Send notification to user
     context.bot.send_message(
         chat_id=user_id,
-        text=f"✅ Admin telah menambahkan *{jumlah} Quota*!\n"
-             f"🔄 Total quota Anda sekarang: {total_quota}\n"
-             f"(1 harian + {user['extra_quota']} tambahan)",
+        text=f"✅ Admin telah menambahkan *+{jumlah} Quota*!\n"
+             f"🔄 Total quota Anda sekarang: {total_quota}",            
         parse_mode="Markdown"
     )
     
@@ -269,8 +288,7 @@ class WattpadBot:
         user = get_user(query.from_user.id)
         total_quota = user["daily_quota"] + user["extra_quota"]
         
-        if total_quota <= 0:
-            query.delete()
+        if total_quota <= 0:            
             query.message.reply_text(
                 "❌ Quota Anda habis!\n"
                 "Quota harian akan direset besok pukul 00:00 WIB.\n"
@@ -395,6 +413,7 @@ def main():
     
     # Tambahkan handler
     dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("help", help))
     dispatcher.add_handler(CommandHandler("beli", beli_quota))
     dispatcher.add_handler(CommandHandler("quota", cek_quota))
     dispatcher.add_handler(CommandHandler("addquota", admin_tambah_quota, filters=Filters.chat(ADMIN_CHAT_ID)))
