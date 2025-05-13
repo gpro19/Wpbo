@@ -1,3 +1,3 @@
-python-telegram-bot==20.3
-aiohttp==3.8.6
-Flask==2.3.2
+python-telegram-bot==13.7  # Or any other version you are using
+requests
+flask
