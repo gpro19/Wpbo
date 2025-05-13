@@ -1,8 +1,8 @@
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
-from .wattpad import WattpadBot
-from .database import DatabaseManager
-from .config import QUOTA_PRICES, ADMIN_USERNAME
+from wattpad import WattpadBot
+from database import DatabaseManager
+from config import QUOTA_PRICES, ADMIN_USERNAME
 
 def start_command(update: Update, context: CallbackContext):
     """Handler untuk command /start"""
