@@ -317,11 +317,12 @@ class WattpadBot:
             query.edit_message_reply_markup(reply_markup=None)
             
         except Exception as e:
-            logger.error(f"Error in download handler: {e})
+            logger.error(f"Error in download handler: {e}")  # Perbaikan di sini
             processing_msg.edit_text("⚠️ An error occurred. Please try again.")
         finally:
             if 'filepath' in locals() and os.path.exists(filepath):
                 os.remove(filepath)
+
 
     def handle_no_quota(self, message, user):
         keyboard = [
