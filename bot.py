@@ -91,11 +91,11 @@ def start(update: Update, context: CallbackContext):
     total_quota = user["daily_quota"] + user["extra_quota"]    
     
     update.message.reply_text(
-        f"📚 *Wattpad to EPUB Bot*\n\n"
-        f"🔄 Quota Anda hari ini: *{total_quota}* (1 quota harian gratis)\n"
-        "Kirim link cerita Wattpad untuk mendapatkan EPUB.\n"
-        "Quota harian direset tiap hari pukul 00:00 WIB.\n"
-        "Gunakan /beli untuk quota tambahan.",
+        f"✨ *Wattpad EPUB Converter*\n\n"
+        f"📊 Quota: {total_quota} (1 gratis/hari)\n"
+        f"⏱ Reset: Setiap jam 00:00 WIB\n\n"
+        f"Kirim link Wattpad untuk mulai convert.\n"
+        f"Gunakan /help untuk panduan lengkap.",
         parse_mode="Markdown"
     )
     
