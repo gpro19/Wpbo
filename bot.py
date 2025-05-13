@@ -24,6 +24,19 @@ TELEGRAM_TOKEN = "7619753860:AAHDPdB12JDzsTyj2Q1CWOJV6y4ol0XXCfw"  # Ganti denga
 # Channel ID untuk log
 LOG_CHANNEL_ID = "-1002594638851"  # Ganti dengan channel log Anda
 
+
+def start_command(update: Update, context: CallbackContext):
+    """Handler untuk command /start"""
+    help_text = (
+        "📚 *Wattpad to EPUB Bot*\n\n"
+        "Send me a Wattpad story URL and I'll convert it to EPUB format.\n\n"
+        "Features:\n"
+        "- Fast EPUB download\n"
+        "- Preserves story formatting\n\n"
+        "Just send me a Wattpad link to get started!"
+    )
+    update.message.reply_text(help_text, parse_mode='Markdown')
+
 class WattpadBot:
     def __init__(self):
         self.headers = {"User-Agent": "WattpadToEPUBBot/1.0"}
@@ -32,7 +45,6 @@ class WattpadBot:
         self.part_pattern = r'wattpad\.com/(\d+)'
         self.temp_dir = "temp_downloads"
         
-        # Buat direktori temporary jika belum ada
         if not os.path.exists(self.temp_dir):
             os.makedirs(self.temp_dir)
 
@@ -53,7 +65,6 @@ class WattpadBot:
 
     def create_download_keyboard(self, story_id):
         """Membuat keyboard inline untuk download options"""
-        # Ganti _ dengan - di story_id untuk menghindari masalah parsing
         safe_id = str(story_id).replace('_', '-')
         
         keyboard = [
@@ -97,7 +108,6 @@ class WattpadBot:
             url = f"{self.base_url}/download/{story_id}"
             response = requests.get(url, params=params, stream=True, timeout=60)
             response.raise_for_status()
-            
             return response
         except Exception as e:
             logger.error(f"Download error: {e}")
@@ -129,13 +139,9 @@ class WattpadBot:
         query = update.callback_query
         query.answer()
         
-        # Parse callback data
         try:
             _, story_id, file_type = query.data.split('_', 2)
-            story_id = story_id.replace('-', '_')  # Kembalikan ID ke format asli
-            
-            if file_type != 'epub':
-                raise ValueError("Invalid file type")
+            story_id = story_id.replace('-', '_')
                 
         except Exception as e:
             logger.error(f"Invalid callback data: {query.data} - {e}")
@@ -146,38 +152,32 @@ class WattpadBot:
         processing_msg = message.reply_text("⏳ Processing your download request...")
         
         try:
-            # Dapatkan info story untuk nama file
             story_info = self.get_story_info(story_id)
             if not story_info:
                 processing_msg.edit_text("❌ Failed to get story information.")
                 return
             
-            # Membuat nama file yang aman
             title = re.sub(r'[\\/*?:"<>|]', '_', story_info['title'])
             watermark = "@WattpadToEPUBbot"
-            filename = f"{title} ({watermark}).epub"
+            filename = f"{title}({watermark}).epub"
             
-            # Download file
             response = self.download_epub(story_id)
             if not response:
                 processing_msg.edit_text("❌ Download failed. Please try again later.")
                 return
             
-            # Simpan file sementara
             filepath = os.path.join(self.temp_dir, filename)
             with open(filepath, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192): 
                     if chunk:
                         f.write(chunk)
             
-            # Kirim file ke user
             with open(filepath, 'rb') as f:
                 message.reply_document(
                     document=InputFile(f, filename=filename),
                     caption=f"📚 {story_info['title']}\n⚡ Downloaded via @WattpadToEPUBbot"
                 )
             
-            # Kirim log ke channel
             user = query.from_user
             self.log_to_channel(
                 context=context,
@@ -187,10 +187,7 @@ class WattpadBot:
                 title=story_info['title']
             )
             
-            # Hapus pesan processing
             processing_msg.delete()
-            
-            # Hapus keyboard dari pesan asli
             query.edit_message_reply_markup(reply_markup=None)
             
         except Exception as e:
@@ -198,7 +195,6 @@ class WattpadBot:
             processing_msg.edit_text("⚠️ An error occurred. Please try again.")
             
         finally:
-            # Bersihkan file temporary
             if 'filepath' in locals() and os.path.exists(filepath):
                 os.remove(filepath)
 
@@ -212,21 +208,18 @@ class WattpadBot:
         if not text:
             return
         
-        # Cari story IDs dalam pesan
         story_ids = set(re.findall(self.story_pattern, text))
         part_ids = set(re.findall(self.part_pattern, text))
         
         if not story_ids and not part_ids:
             return
         
-        # Proses setiap story
         for story_id in story_ids:
             try:
                 story_info = self.get_story_info(story_id)
                 if not story_info:
                     continue
                 
-                # Kirim info story dengan keyboard download
                 message.reply_photo(
                     photo=story_info['cover'],
                     caption=self.format_story_details(story_info),
@@ -237,31 +230,26 @@ class WattpadBot:
             except Exception as e:
                 logger.error(f"Error processing story {story_id}: {e}")
 
-# Flask Routes
 @flask_app.route('/')
 def home():
     return "Wattpad to EPUB Bot is running!"
 
 def main():
     """Entry point untuk aplikasi"""
-    # Inisialisasi bot
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
     wattpad_bot = WattpadBot()
     
-    # Register handlers
     dispatcher.add_handler(CommandHandler('start', start_command))
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, wattpad_bot.handle_message))
     dispatcher.add_handler(CallbackQueryHandler(wattpad_bot.handle_callback_query))
     
-    # Jalankan Flask di thread terpisah
     flask_thread = threading.Thread(
         target=lambda: flask_app.run(host='0.0.0.0', port=8000, debug=False, use_reloader=False),
         daemon=True
     )
     flask_thread.start()
     
-    # Mulai bot
     updater.start_polling()
     updater.idle()
 
