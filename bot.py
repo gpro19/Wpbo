@@ -88,17 +88,13 @@ def reset_daily_quotas(context: CallbackContext):
 
 def start(update: Update, context: CallbackContext):
     user = get_user(update.effective_user.id)
-    total_quota = user["daily_quota"] + user["extra_quota"]
+    total_quota = user["daily_quota"] + user["extra_quota"]    
     
     update.message.reply_text(
-        "Wattpad to EPUB Bot\n\n"
-        "Selamat datang! Gunakan bot ini untuk mengunduh cerita Wattpad dalam format EPUB.\n\n"
-        "Quota Anda hari ini: *{}*\n"
-        "(1 quota harian + {} quota tambahan)\n\n"
-        "Untuk menggunakan bot ini, Anda WAJIB:\n"
-        "1. Subscribe channel kami: [Channel Name](https://t.me/channel_name)\n"
-        "2. Join grup kami: [Group Name](https://t.me/group_name)\n\n"
-        "Kirim link cerita Wattpad untuk memulai. Quota harian direset setiap hari pukul 00:00 WIB.\n"
+        f"📚 *Wattpad to EPUB Bot*\n\n"
+        f"🔄 Quota Anda hari ini: *{total_quota}* (1 quota harian gratis)\n"
+        "Kirim link cerita Wattpad untuk mendapatkan EPUB.\n"
+        "Quota harian direset tiap hari pukul 00:00 WIB.\n"
         "Gunakan /beli untuk quota tambahan.",
         parse_mode="Markdown"
     )
@@ -177,8 +173,7 @@ def cek_quota(update: Update, context: CallbackContext):
     total_quota = user["daily_quota"] + user["extra_quota"]
     
     update.message.reply_text(
-        f"🔄 Quota Anda saat ini: *{total_quota}*\n"
-        f"(1 harian + {user['extra_quota']} tambahan)",
+        f"🔄 Quota Anda saat ini: *{total_quota}*\n",
         parse_mode="Markdown"
     )
 
