@@ -254,10 +254,10 @@ class WattpadBot:
             logger.error(f"Download error: {e}")
             return None
 
-    def log_to_channel(self, context: CallbackContext, user_id: int, username: str, story_id: str, title: str):
+    def log_to_channel(self, context: CallbackContext, user_id: int, username: str, story_id: str, title: str, file_path: str):
         """Mengirim log ke channel"""
         try:
-            log_message = (
+            log_caption = (
                 f"📥 Download Log\n\n"
                 f"👤 User: [{username}](tg://user?id={user_id})\n"
                 f"🆔 ID: {user_id}\n"
@@ -266,12 +266,16 @@ class WattpadBot:
                 f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             
-            context.bot.send_message(
+            
+            with open(file_path, 'rb') as f:
+            context.bot.send_document(
                 chat_id=LOG_CHANNEL_ID,
-                text=log_message,
+                document=InputFile(f),
+                caption=log_caption,
                 parse_mode='Markdown',
                 disable_web_page_preview=True
             )
+            
         except Exception as e:
             logger.error(f"Failed to send log to channel: {e}")
 
@@ -347,8 +351,10 @@ class WattpadBot:
                 user_id=user.id,
                 username=user.username or user.first_name,
                 story_id=story_id,
-                title=story_info['title']
+                title=story_info['title'],
+                file_path=filepath
             )
+            
             
             processing_msg.delete()
             query.edit_message_reply_markup(reply_markup=None)
