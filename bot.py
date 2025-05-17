@@ -127,12 +127,12 @@ def reset_daily_quotas(context: CallbackContext):
 
 def start(update: Update, context: CallbackContext):
 
-     if update.effective_chat.type != Chat.PRIVATE:
-         return
+    if update.effective_chat.type != Chat.PRIVATE:
+        return
          
-     if not check_subscription(update, context):
-         send_subscription_required(update)
-         return
+    if not check_subscription(update, context):
+        send_subscription_required(update)
+        return
          
     user = get_user(update.effective_user.id)
     total_quota = user["daily_quota"] + user["extra_quota"]    
@@ -148,12 +148,12 @@ def start(update: Update, context: CallbackContext):
     
 def help(update: Update, context: CallbackContext):
 
-     if update.effective_chat.type != Chat.PRIVATE:
-         return
+    if update.effective_chat.type != Chat.PRIVATE:
+        return
          
-     if not check_subscription(update, context):
-         send_subscription_required(update)
-         return
+    if not check_subscription(update, context):
+        send_subscription_required(update)
+        return
          
     update.message.reply_text(
         "Bantuan Penggunaan Bot\n\n"
@@ -224,12 +224,12 @@ def admin_tambah_quota(update: Update, context: CallbackContext):
     update.message.reply_text(f"✅ Berhasil menambahkan {jumlah} quota untuk user {user_id}")
 
 def cek_quota(update: Update, context: CallbackContext):
-     if update.effective_chat.type != Chat.PRIVATE:
-         return
+    if update.effective_chat.type != Chat.PRIVATE:
+        return
          
-     if not check_subscription(update, context):
-         send_subscription_required(update)
-         return
+    if not check_subscription(update, context):
+        send_subscription_required(update)
+        return
          
     user = get_user(update.effective_user.id)
     total_quota = user["daily_quota"] + user["extra_quota"]
