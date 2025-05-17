@@ -33,6 +33,45 @@ TOKEN = "7619753860:AAHDPdB12JDzsTyj2Q1CWOJV6y4ol0XXCfw"  # Ganti dengan token A
 ADMIN_CHAT_ID = 1910497806  # Ganti dengan chat ID admin
 ADMIN_USERNAME = "@MzCoder"  # Ganti dengan username admin
 LOG_CHANNEL_ID = "-1002594638851"  # Ganti dengan channel log Anda
+REQUIRED_CHANNEL = "@DutabotID"  # Ganti dengan channel Anda
+REQUIRED_GROUP = "@DutabotSupport"
+
+
+
+def check_subscription(update: Update, context: CallbackContext):
+    """Cek real-time subscription tanpa menyimpan di database"""
+    user_id = update.effective_user.id
+    
+    try:
+        # Cek status channel
+        channel_member = context.bot.get_chat_member(REQUIRED_CHANNEL, user_id)
+        # Cek status grup
+        group_member = context.bot.get_chat_member(REQUIRED_GROUP, user_id)
+        
+        return (channel_member.status in ['member', 'administrator', 'creator'] and 
+                group_member.status in ['member', 'administrator', 'creator'])
+    except Exception as e:
+        logger.error(f"Error checking subscription: {e}")
+        return False
+
+def send_subscription_required(update: Update):
+    keyboard = [
+        [
+            InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{REQUIRED_CHANNEL[1:]}"),
+            InlineKeyboardButton("👥 Join Group", url=f"https://t.me/{REQUIRED_GROUP[1:]}")
+        ]        
+    ]
+    
+    update.message.reply_text(
+        "📢 *Untuk menggunakan bot ini, Anda harus:*\n\n"
+        f"1. Subscribe channel kami: {REQUIRED_CHANNEL}\n"
+        f"2. Join grup kami: {REQUIRED_GROUP}\n\n"
+        "Setelah itu, Anda bisa menggunakan bot ini.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+
 
 def get_user(user_id):
     now = datetime.now()
@@ -87,6 +126,14 @@ def reset_daily_quotas(context: CallbackContext):
     logger.info("✅ Reset harian quota selesai")
 
 def start(update: Update, context: CallbackContext):
+
+     if update.effective_chat.type != Chat.PRIVATE:
+         return
+         
+     if not check_subscription(update, context):
+         send_subscription_required(update)
+         return
+         
     user = get_user(update.effective_user.id)
     total_quota = user["daily_quota"] + user["extra_quota"]    
     
@@ -100,6 +147,14 @@ def start(update: Update, context: CallbackContext):
     )
     
 def help(update: Update, context: CallbackContext):
+
+     if update.effective_chat.type != Chat.PRIVATE:
+         return
+         
+     if not check_subscription(update, context):
+         send_subscription_required(update)
+         return
+         
     update.message.reply_text(
         "Bantuan Penggunaan Bot\n\n"
         "Berikut adalah daftar perintah yang tersedia:\n"
@@ -169,6 +224,13 @@ def admin_tambah_quota(update: Update, context: CallbackContext):
     update.message.reply_text(f"✅ Berhasil menambahkan {jumlah} quota untuk user {user_id}")
 
 def cek_quota(update: Update, context: CallbackContext):
+     if update.effective_chat.type != Chat.PRIVATE:
+         return
+         
+     if not check_subscription(update, context):
+         send_subscription_required(update)
+         return
+         
     user = get_user(update.effective_user.id)
     total_quota = user["daily_quota"] + user["extra_quota"]
     
@@ -258,21 +320,22 @@ class WattpadBot:
         """Mengirim log ke channel"""
         try:
             log_caption = (
-                f"📥 Download Log\n\n"
-                f"👤 User: [{username}](tg://user?id={user_id})\n"
-                f"🆔 ID: {user_id}\n"
-                f"📖 Story: [{title}](https://www.wattpad.com/story/{story_id})\n"
-                f"🆔 Story ID: {story_id}\n"
-                f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                "<b>📥 Download Log</b>\n\n"
+                f"👤 <b>User:</b> <a href='tg://user?id={user_id}'>{username}</a>\n"
+                f"🆔 <b>ID:</b> <code>{user_id}</code>\n"
+                f"📖 <b>Story:</b> <a href='https://www.wattpad.com/story/{story_id}'>{title}</a>\n"
+                f"🆔 <b>Story ID:</b> <code>{story_id}</code>\n"
+                f"⏰ <b>Time:</b> <code>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</code>"
             )
             
             with open(file_path, 'rb') as f:
                 context.bot.send_document(
-                chat_id=LOG_CHANNEL_ID,
-                document=InputFile(f),
-                caption=log_caption,
-                parse_mode='Markdown'       
-            )
+                    chat_id=LOG_CHANNEL_ID,
+                    document=InputFile(f),
+                    caption=log_caption,
+                    parse_mode='HTML'       
+                )
+
             
         except Exception as e:
             logger.error(f"Failed to send log to channel: {e}")
@@ -368,6 +431,14 @@ class WattpadBot:
     def handle_message(self, update: Update, context: CallbackContext):
         """Menangani pesan masuk"""
         message = update.message
+        
+        if update.effective_chat.type != Chat.PRIVATE:
+            return
+         
+        if not check_subscription(update, context):
+            send_subscription_required(update)
+            return        
+            
         if not message or message.from_user.is_bot:
             return
         
