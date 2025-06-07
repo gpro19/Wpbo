@@ -243,7 +243,7 @@ def cek_quota(update: Update, context: CallbackContext):
 class WattpadBot:
     def __init__(self):
         self.headers = {"User-Agent": "WattpadToEPUBBot/1.0"}
-        self.base_url = "https://wpd.rambhat.la"
+        self.base_url = "https://wpd.my"
         self.story_pattern = r'wattpad\.com/story/(\d+)'
         self.part_pattern = r'wattpad\.com/(\d+)'
         self.temp_dir = "temp_downloads"
